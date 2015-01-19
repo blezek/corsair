@@ -1,3 +1,4 @@
 src/github.com
 bin
 pkg
+assets.go
