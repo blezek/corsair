@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/dblezek/lrserver"
 	"github.com/elazarl/goproxy"
 	"io/ioutil"
 	"log"
@@ -79,6 +80,11 @@ func main() {
 	// Set up a proxy object, and let it be chatty if needed
 	proxy := goproxy.NewProxyHttpServer()
 	proxy.Verbose = *verbose
+
+	if !*verbose {
+		log.SetOutput(ioutil.Discard)
+		lrserver.Logger = log.New(ioutil.Discard, "[lrserver]", 0)
+	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		// Do we have a file?

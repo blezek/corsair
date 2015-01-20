@@ -1,8 +1,8 @@
 package main
 
 import (
+	"github.com/dblezek/lrserver"
 	"github.com/go-fsnotify/fsnotify"
-	"github.com/jaschaephraim/lrserver"
 	"log"
 	"time"
 )
