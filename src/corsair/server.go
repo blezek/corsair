@@ -12,7 +12,7 @@ import (
 )
 
 // Start up the server, never return
-func startServer(destination *url.URL) {
+func startServer(directory string, destination *url.URL, port int) {
 	// Set up a proxy object, and let it be chatty if needed
 	proxy := goproxy.NewProxyHttpServer()
 	proxy.Verbose = *verbose
@@ -23,9 +23,9 @@ func startServer(destination *url.URL) {
 		pathWithoutLeadingSlash := req.URL.Path[1:]
 		if strings.HasSuffix(pathWithoutLeadingSlash, "/") {
 			// look for index.html
-			file = filepath.Join(*staticFilesDirectory, pathWithoutLeadingSlash, "index.html")
+			file = filepath.Join(directory, pathWithoutLeadingSlash, "index.html")
 		} else {
-			file = filepath.Join(*staticFilesDirectory, pathWithoutLeadingSlash)
+			file = filepath.Join(directory, pathWithoutLeadingSlash)
 		}
 		if *verbose {
 			log.Printf("Get request for %v looking for file at %v\n", req.URL, file)
@@ -47,5 +47,5 @@ func startServer(destination *url.URL) {
 		}
 	})
 
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *port), nil))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 }

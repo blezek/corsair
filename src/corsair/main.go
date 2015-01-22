@@ -3,22 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
-<<<<<<< HEAD
-	"github.com/dblezek/lrserver"
-	"github.com/elazarl/goproxy"
-	"io/ioutil"
-=======
 	"github.com/codegangsta/cli"
->>>>>>> Broke into subsections, adding proper cli parsing
 	"log"
 	"net/url"
 	"os"
-<<<<<<< HEAD
-	"path/filepath"
-	"regexp"
-	"strings"
-=======
->>>>>>> Broke into subsections, adding proper cli parsing
 )
 
 var (
@@ -54,10 +42,67 @@ func main() {
 	readme, _ := Asset("Readme.md")
 
 	app.Usage = "\n" + string(readme)
+	app.Version = "1.0.0"
+	app.EnableBashCompletion = true
+	app.Author = "Daniel Blezek"
+	app.Email = "daniel.blezek@gmail.com"
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:  "dir,d,directory",
+			Value: currentWorkingDirectory,
+			Usage: "Where to look for static files, defaults to current working directory",
+		},
+		cli.BoolFlag{
+			Name:  "verbose",
+			Usage: "Verbose logging",
+		},
+		cli.IntFlag{
+			Name:  "port,p",
+			Value: 8080,
+			Usage: "Port to serve static files and proxy to the remote",
+		},
+		cli.StringFlag{
+			Name:  "remote,proxy,r",
+			Value: "http://localhost:80",
+			Usage: "Proxy destination",
+		},
+		cli.BoolFlag{
+			Name:  "livereload,l",
+			Usage: "Support livereload of the pages",
+		},
+	}
+
 	app.Action = func(c *cli.Context) {
-		println("Arrrgh me hearties")
+		// do we have a valid directory?
+		if _, err := os.Stat(c.String("directory")); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Directory %v does not exist\n", c.String("directory"))
+			cli.ShowAppHelp(c)
+			os.Exit(1)
+		}
+
+		// Can we parse the URL?
+		var destination *url.URL
+		var err error
+		destination, err = url.Parse(c.String("proxy"))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Could not parse %s\n  Error: %v\n", c.String("proxy"), err)
+			cli.ShowAppHelp(c)
+			os.Exit(1)
+		}
+
+		// Do we live reload?
+		if *livereload {
+			livereloader(c.String("directory"))
+		}
+
+		log.Printf("Starting corsair in %v on port %v forwarding to %v://%v", c.String("directory"), c.Int("port"), destination.Scheme, destination.Host)
+		log.Printf("Visit:\n\n    http://localhost:%d\n\nTo get started", c.Int("port"))
+
+		startServer(*staticFilesDirectory, destination, c.Int("port"))
+
 		os.Exit(0)
 	}
+
 	app.Run(os.Args)
 	os.Exit(0)
 	// Parse our flags!
@@ -95,71 +140,12 @@ func main() {
 	log.Printf("Starting corsair in %v on port %v forwarding to %v://%v", *staticFilesDirectory, *port, destination.Scheme, destination.Host)
 	log.Printf("Visit:\n\n    http://localhost:%d\n\nTo get started", *port)
 
-<<<<<<< HEAD
-	snippit := fmt.Sprintf(`<script>document.write('<script src="http://' + (location.host || 'localhost').split(':')[0] + ':%d/livereload.js?snipver=1"></' + 'script>')</script>`, *port)
-	// Ignore case, look for "</body>", allow extra stuff in the tags
-	expression, _ := regexp.Compile("(?i)</body[^>]+>")
-	expression, _ = regexp.Compile("(?i)</body[^>]*>")
 
-	// Set up a proxy object, and let it be chatty if needed
-	proxy := goproxy.NewProxyHttpServer()
-	proxy.Verbose = *verbose
-
-	if !*verbose {
-		log.SetOutput(ioutil.Discard)
-		lrserver.Logger = log.New(ioutil.Discard, "[lrserver]", 0)
-	}
-
-	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		// Do we have a file?
-		var file string
-		pathWithoutLeadingSlash := req.URL.Path[1:]
-		if strings.HasSuffix(pathWithoutLeadingSlash, "/") {
-			// look for index.html
-			file = filepath.Join(*staticFilesDirectory, pathWithoutLeadingSlash, "index.html")
-		} else {
-			file = filepath.Join(*staticFilesDirectory, pathWithoutLeadingSlash)
-		}
-		if *verbose {
-			log.Printf("Get request for %v looking for file at %v\n", req.URL, file)
-		}
-		if _, err := os.Stat(file); err == nil {
-			// Serve the file
-			if *verbose {
-				log.Printf("Found file %v and serving", file)
-			}
-
-			// Do we end with ".html?"
-			if strings.HasSuffix(file, ".html") {
-				// Inject some HTML before the </body> tag
-				contents, _ := ioutil.ReadFile(file)
-				contentString := expression.ReplaceAllString(string(contents), snippit+"$0")
-				fmt.Fprint(w, contentString)
-			} else {
-				// spit it out man!
-				http.ServeFile(w, req, file)
-			}
-		} else {
-			// Proxy...
-			req.URL.Scheme = destination.Scheme
-			req.URL.Host = destination.Host
-			if *verbose {
-				log.Printf("Proxy request to %v", req.URL)
-			}
-			proxy.ServeHTTP(w, req)
-		}
-	})
-
-	// Do we live reload?
-	if *livereload {
-		livereloader(*staticFilesDirectory)
-	}
-
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *port), nil))
-	log.Print("Running!")
-=======
 	startServer(destination)
->>>>>>> Broke into subsections, adding proper cli parsing
+	log.Printf("Starting corsair in %v on port %v forwarding to %v://%v", *staticFilesDirectory, *port, destination.Scheme, destination.Host)
+	log.Printf("Visit:\n\n    http://localhost:%d\n\nTo get started", *port)
+
+	startServer(*staticFilesDirectory, destination, *port)
 }
 
 // The text template for the Default help topic.
