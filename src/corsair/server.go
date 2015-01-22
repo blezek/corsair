@@ -12,7 +12,7 @@ import (
 )
 
 // Start up the server, never return
-func startServer(verbose bool, directory string, destination *url.URL, port int) {
+func startServer(directory string, destination *url.URL, port int) {
 	// Set up a proxy object, and let it be chatty if needed
 	proxy := goproxy.NewProxyHttpServer()
 	proxy.Verbose = verbose

@@ -31,7 +31,9 @@ func request(fileName string, interval time.Duration) {
 
 func livereloader(directory string) {
 
-	log.Printf("Starting livereloader @ %v\n", directory)
+	if verbose {
+		log.Printf("Starting livereloader @ %v\n", directory)
+	}
 	watcher, err := fsnotify.NewWatcher()
 
 	if *readInput {
@@ -45,7 +47,9 @@ func livereloader(directory string) {
 			reader := bufio.NewReader(os.Stdin)
 			for {
 				f, _ := reader.ReadString(terminationCharacter)
-				log.Printf("Read %v\n", f)
+				if verbose {
+					log.Printf("Read %v\n", f)
+				}
 				go request(f, 300*time.Millisecond)
 			}
 		}()
@@ -55,7 +59,9 @@ func livereloader(directory string) {
 		for {
 			select {
 			case event := <-watcher.Events:
-				log.Println("Modifed file ", event.Name)
+				if verbose {
+					log.Println("Modifed file ", event.Name)
+				}
 				// Record the time of this reload request, and queue it up
 				lastReloadRequest = time.Now()
 				go request(event.Name, 300*time.Millisecond)
