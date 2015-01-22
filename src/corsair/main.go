@@ -3,40 +3,63 @@ package main
 import (
 	"flag"
 	"fmt"
+<<<<<<< HEAD
 	"github.com/dblezek/lrserver"
 	"github.com/elazarl/goproxy"
 	"io/ioutil"
+=======
+	"github.com/codegangsta/cli"
+>>>>>>> Broke into subsections, adding proper cli parsing
 	"log"
-	"net/http"
 	"net/url"
 	"os"
+<<<<<<< HEAD
 	"path/filepath"
 	"regexp"
 	"strings"
+=======
+>>>>>>> Broke into subsections, adding proper cli parsing
 )
 
-func main() {
-	currentWorkingDirectory, _ := os.Getwd()
-
+var (
+	currentWorkingDirectory, _ = os.Getwd()
 	// Flags
-	port := flag.Int("port", 8080, "Serve static files on this port, falling back to the proxy if the file does not exist.")
+	port = flag.Int("port", 8080, "Serve static files on this port, falling back to the proxy if the file does not exist.")
+
+	staticFilesDirectory = flag.String("dir", currentWorkingDirectory, fmt.Sprintf("Where to look for static files, defaults to current working directory (%v in this case)", currentWorkingDirectory))
+
+	proxyDestination = flag.String("remote", "http://localhost:80", "If static files are not found, forward the request to the remote")
+
+	help = flag.Bool("help", false, "Help")
+
+	verbose = flag.Bool("verbose", false, "Verbose logging")
+
+	livereload = flag.Bool("livereload", false, "Support live reload of the pages")
+)
+
+func init() {
 	flag.IntVar(port, "p", 8080, "Short form of --port")
-
-	staticFilesDirectory := flag.String("dir", currentWorkingDirectory, fmt.Sprintf("Where to look for static files, defaults to current working directory (%v in this case)", currentWorkingDirectory))
 	flag.StringVar(staticFilesDirectory, "d", currentWorkingDirectory, "Short form of --dir")
-
-	proxyDestination := flag.String("remote", "http://localhost:80", "If static files are not found, forward the request to the remote")
 	flag.StringVar(proxyDestination, "r", "http://localhost:80", "Short form of --remote")
-
-	help := flag.Bool("help", false, "Help")
 	flag.BoolVar(help, "h", false, "Help")
-
-	verbose := flag.Bool("verbose", false, "Verbose logging")
 	flag.BoolVar(verbose, "v", false, "Alias for --verbose")
-
-	livereload := flag.Bool("livereload", false, "Support live reload of the pages")
 	flag.BoolVar(livereload, "l", false, "Alias for --livereload")
+}
 
+func main() {
+
+	cli.AppHelpTemplate = AppHelpTemplate
+	app := cli.NewApp()
+	app.Name = "corsair"
+	readme, _ := Asset("Readme.md")
+
+	app.Usage = "\n" + string(readme)
+	app.Action = func(c *cli.Context) {
+		println("Arrrgh me hearties")
+		os.Exit(0)
+	}
+	app.Run(os.Args)
+	os.Exit(0)
 	// Parse our flags!
 	flag.Parse()
 
@@ -72,6 +95,7 @@ func main() {
 	log.Printf("Starting corsair in %v on port %v forwarding to %v://%v", *staticFilesDirectory, *port, destination.Scheme, destination.Host)
 	log.Printf("Visit:\n\n    http://localhost:%d\n\nTo get started", *port)
 
+<<<<<<< HEAD
 	snippit := fmt.Sprintf(`<script>document.write('<script src="http://' + (location.host || 'localhost').split(':')[0] + ':%d/livereload.js?snipver=1"></' + 'script>')</script>`, *port)
 	// Ignore case, look for "</body>", allow extra stuff in the tags
 	expression, _ := regexp.Compile("(?i)</body[^>]+>")
@@ -133,4 +157,33 @@ func main() {
 
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *port), nil))
 	log.Print("Running!")
+=======
+	startServer(destination)
+>>>>>>> Broke into subsections, adding proper cli parsing
 }
+
+// The text template for the Default help topic.
+// cli.go uses text/template to render templates. You can
+// render custom help text by setting this variable.
+var AppHelpTemplate = `NAME:
+   {{.Name}} - corsair is a small webserver to help write software that makes REST calls to a server, without having to run on the server
+
+USAGE:
+   {{.Name}} {{if .Flags}}[global options] {{end}}command{{if .Flags}} [command options]{{end}} [arguments...]
+
+VERSION:
+   {{.Version}}{{if or .Author .Email}}
+
+AUTHOR:{{if .Author}}
+  {{.Author}}{{if .Email}} - <{{.Email}}>{{end}}{{else}}
+  {{.Email}}{{end}}{{end}}
+
+COMMANDS:
+   {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
+   {{end}}{{if .Flags}}
+GLOBAL OPTIONS:
+   {{range .Flags}}{{.}}
+   {{end}}{{end}}
+HELP:
+{{.Usage}}
+`
