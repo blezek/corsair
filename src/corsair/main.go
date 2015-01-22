@@ -3,12 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/dblezek/lrserver"
 	"github.com/elazarl/goproxy"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -66,17 +69,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Do we live reload?
-	if *livereload {
-		livereloader(*staticFilesDirectory)
-	}
-
 	log.Printf("Starting corsair in %v on port %v forwarding to %v://%v", *staticFilesDirectory, *port, destination.Scheme, destination.Host)
 	log.Printf("Visit:\n\n    http://localhost:%d\n\nTo get started", *port)
+
+	snippit := fmt.Sprintf(`<script>document.write('<script src="http://' + (location.host || 'localhost').split(':')[0] + ':%d/livereload.js?snipver=1"></' + 'script>')</script>`, *port)
+	// Ignore case, look for "</body>", allow extra stuff in the tags
+	expression, _ := regexp.Compile("(?i)</body[^>]+>")
+	expression, _ = regexp.Compile("(?i)</body[^>]*>")
 
 	// Set up a proxy object, and let it be chatty if needed
 	proxy := goproxy.NewProxyHttpServer()
 	proxy.Verbose = *verbose
+
+	if !*verbose {
+		log.SetOutput(ioutil.Discard)
+		lrserver.Logger = log.New(ioutil.Discard, "[lrserver]", 0)
+	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		// Do we have a file?
@@ -96,7 +104,17 @@ func main() {
 			if *verbose {
 				log.Printf("Found file %v and serving", file)
 			}
-			http.ServeFile(w, req, file)
+
+			// Do we end with ".html?"
+			if strings.HasSuffix(file, ".html") {
+				// Inject some HTML before the </body> tag
+				contents, _ := ioutil.ReadFile(file)
+				contentString := expression.ReplaceAllString(string(contents), snippit+"$0")
+				fmt.Fprint(w, contentString)
+			} else {
+				// spit it out man!
+				http.ServeFile(w, req, file)
+			}
 		} else {
 			// Proxy...
 			req.URL.Scheme = destination.Scheme
@@ -108,5 +126,11 @@ func main() {
 		}
 	})
 
+	// Do we live reload?
+	if *livereload {
+		livereloader(*staticFilesDirectory)
+	}
+
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *port), nil))
+	log.Print("Running!")
 }
