@@ -24,10 +24,13 @@ release: corsair
 
 all: fmt corsair
 
+<<<<<<< HEAD
 
 
 bin/go-bindata:
 	GOOS="" GOARCH="" go get -u github.com/jteeuwen/go-bindata/...
 
+=======
+>>>>>>> More flags, cleanup
 clean:
 	go clean -i -r corsair/...

@@ -12,10 +12,10 @@ import (
 )
 
 // Start up the server, never return
-func startServer(directory string, destination *url.URL, port int) {
+func startServer(verbose bool, directory string, destination *url.URL, port int) {
 	// Set up a proxy object, and let it be chatty if needed
 	proxy := goproxy.NewProxyHttpServer()
-	proxy.Verbose = *verbose
+	proxy.Verbose = verbose
 
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		// Do we have a file?
@@ -27,12 +27,12 @@ func startServer(directory string, destination *url.URL, port int) {
 		} else {
 			file = filepath.Join(directory, pathWithoutLeadingSlash)
 		}
-		if *verbose {
+		if verbose {
 			log.Printf("Get request for %v looking for file at %v\n", req.URL, file)
 		}
 		if _, err := os.Stat(file); err == nil {
 			// Serve the file
-			if *verbose {
+			if verbose {
 				log.Printf("Found file %v and serving", file)
 			}
 			http.ServeFile(w, req, file)
@@ -40,7 +40,7 @@ func startServer(directory string, destination *url.URL, port int) {
 			// Proxy...
 			req.URL.Scheme = destination.Scheme
 			req.URL.Host = destination.Host
-			if *verbose {
+			if verbose {
 				log.Printf("Proxy request to %v", req.URL)
 			}
 			proxy.ServeHTTP(w, req)
