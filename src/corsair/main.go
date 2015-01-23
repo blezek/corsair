@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/codegangsta/cli"
+	"github.com/skratchdot/open-golang/open"
 	"log"
 	"net/url"
 	"os"
@@ -47,6 +48,10 @@ func main() {
 			Value: 8080,
 			Usage: "Port to serve static files and proxy to the remote",
 		},
+		cli.BoolFlag{
+			Name:  "open,o",
+			Usage: "Open web page in browser",
+		},
 		cli.StringFlag{
 			Name:  "remote,proxy,r",
 			Value: "http://localhost:80",
@@ -67,6 +72,7 @@ func main() {
 		// Set some variables
 		verbose = c.Bool("verbose")
 		silent = c.Bool("silent")
+		port := c.Int("port")
 
 		// do we have a valid directory?
 		if _, err := os.Stat(c.String("directory")); err != nil {
@@ -93,10 +99,15 @@ func main() {
 
 		if !silent {
 			log.Printf("Starting corsair in %v on port %v forwarding to %v://%v", c.String("directory"), c.Int("port"), destination.Scheme, destination.Host)
-			log.Printf("Visit:\n\n    http://localhost:%d\n\nTo get started", c.Int("port"))
+			log.Printf("Visit:\n\n    http://localhost:%d\n\nTo get started", port)
 		}
 
-		startServer(c.String("directory"), destination, c.Int("port"))
+		if c.Bool("open") {
+			// Open the page
+			open.Start(fmt.Sprintf("http://localhost:%d", port))
+		}
+
+		startServer(c.String("directory"), destination, port)
 	}
 
 	app.Run(os.Args)
