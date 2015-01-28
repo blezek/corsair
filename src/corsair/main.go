@@ -17,7 +17,6 @@ var (
 )
 
 func main() {
-	currentWorkingDirectory, _ := os.Getwd()
 
 	cli.AppHelpTemplate = AppHelpTemplate
 	app := cli.NewApp()
@@ -32,7 +31,6 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:  "dir,d,directory",
-			Value: currentWorkingDirectory,
 			Usage: "Where to look for static files, defaults to current working directory",
 		},
 		cli.BoolFlag{
@@ -74,9 +72,14 @@ func main() {
 		silent = c.Bool("silent")
 		port := c.Int("port")
 
+		directory, _ := os.Getwd()
+		if c.String("directory") != "" {
+			directory = c.String("directory")
+		}
+
 		// do we have a valid directory?
-		if _, err := os.Stat(c.String("directory")); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: Directory %v does not exist\n", c.String("directory"))
+		if _, err := os.Stat(directory); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Directory %v does not exist\n", directory)
 			cli.ShowAppHelp(c)
 			os.Exit(1)
 		}
@@ -94,11 +97,11 @@ func main() {
 		// Do we live reload?
 		if c.Bool("livereload") {
 			timeoutInMilliseconds = c.Int("timeout")
-			livereloader(c.String("directory"))
+			livereloader(directory)
 		}
 
 		if !silent {
-			log.Printf("Starting corsair in %v on port %v forwarding to %v://%v", c.String("directory"), c.Int("port"), destination.Scheme, destination.Host)
+			log.Printf("Starting corsair in %v on port %v forwarding to %v://%v", directory, c.Int("port"), destination.Scheme, destination.Host)
 			log.Printf("Visit:\n\n    http://localhost:%d\n\nTo get started", port)
 		}
 
@@ -107,7 +110,7 @@ func main() {
 			open.Start(fmt.Sprintf("http://localhost:%d", port))
 		}
 
-		startServer(c.String("directory"), destination, port)
+		startServer(directory, destination, port)
 	}
 
 	app.Run(os.Args)
