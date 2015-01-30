@@ -12,7 +12,18 @@ Corsair
 
 ## Why Corsair Exists
 
-Frequently, I develop [single page JavaScript applications (SPA)](http://en.wikipedia.org/wiki/Single-page_application).  Usually, the REST API is completed long before the JavaScript application is completed.  REST also tends to be slow changing, while the SPA needs constant updating.  We would typically jump through hoops to serve the SPA through the REST server.  Corsair eliminates these hoops by giving the browser a single server, so static pages can be served from a local file, and REST calls are proxied to the remote server.  This is useful for developing [Notion](https://github.com/dblezek/Notion), and [Freeboard dashboards](https://github.com/Freeboard/freeboard).
+Frequently, I develop [single page JavaScript applications (SPA)](http://en.wikipedia.org/wiki/Single-page_application).  Usually, the REST API is completed long before the JavaScript application is completed.  REST also tends to be slow changing, while the SPA needs constant updating.  We would typically jump through hoops to serve the SPA through the REST server.  Because of [cross site request forgery](http://en.wikipedia.org/wiki/Cross-site_request_forgery), browsers typically do not let SPAs make REST requests across domain boundaries.  Specifically, if your SPA is served from a different domain from the REST server, nothing works because the browser blocks those REST requests.  You may have seen these errors before:
+
+```
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the
+remote resource at
+http://slicer.kitware.com/midas3/download/?bitstream=206209&offset=0&name=DWIVolume.mrb&authToken=z1Fox3UzXORN4BJUfoGH08ZN94Hsb8zCfWmqJDXa.
+This can be fixed by moving the resource to the same domain or enabling CORS.
+```
+
+CORS can be enabled if the server returns a `Access-Control-Allow-Origin: *` header, but sometimes you don't want to or can't do that in the REST server.
+
+Corsair eliminates these hoops by giving the browser a single server, so static pages can be served from a local file, and REST calls are proxied to the remote server.  This is useful for developing [Notion](https://github.com/dblezek/Notion), and [Freeboard dashboards](https://github.com/Freeboard/freeboard).
 
 Once the SPA is completed, it can be integrated into the build system for final production deployment.
 

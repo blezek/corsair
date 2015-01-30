@@ -24,8 +24,6 @@ release: corsair
 
 all: fmt corsair
 
-
-
 bin/go-bindata:
 	GOOS="" GOARCH="" go get -u github.com/jteeuwen/go-bindata/...
 
