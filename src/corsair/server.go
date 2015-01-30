@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/elazarl/goproxy"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -27,25 +26,21 @@ func startServer(directory string, destination *url.URL, port int) {
 		} else {
 			file = filepath.Join(directory, pathWithoutLeadingSlash)
 		}
-		if verbose {
-			log.Printf("Get request for %v looking for file at %v\n", req.URL, file)
-		}
+		logger.Debug("Get request for %v looking for file at %v\n", req.URL, file)
+
 		if _, err := os.Stat(file); err == nil {
 			// Serve the file
-			if verbose {
-				log.Printf("Found file %v and serving", file)
-			}
 			http.ServeFile(w, req, file)
+			logger.Debug("Found file %v and serving", file)
 		} else {
 			// Proxy...
 			req.URL.Scheme = destination.Scheme
 			req.URL.Host = destination.Host
-			if verbose {
-				log.Printf("Proxy request to %v", req.URL)
-			}
+			logger.Debug("Proxy request to %v", req.URL)
+
 			proxy.ServeHTTP(w, req)
 		}
 	})
 
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
+	logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 }
