@@ -16,6 +16,7 @@ var (
 	timeoutInMilliseconds = 300
 	silent                = false
 	logger                = logging.MustGetLogger("corsair")
+	addShutdownHook       = false
 )
 
 func init() {
@@ -41,12 +42,17 @@ func main() {
 	app.Email = "daniel.blezek@gmail.com"
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
-			Name:  "dir,d,directory",
+			Name:  "d,directory",
+			Value: "",
 			Usage: "Where to look for static files, defaults to current working directory",
 		},
 		cli.BoolFlag{
 			Name:  "silent",
 			Usage: "Don't print anything at all",
+		},
+		cli.BoolFlag{
+			Name:  "shutdown,s",
+			Usage: "Create a shutdown hook at /corsair, i.e. curl -X DELETE localhost:8080/corsair",
 		},
 		cli.BoolFlag{
 			Name:  "verbose",
@@ -91,6 +97,7 @@ func main() {
 		if c.Bool("silent") {
 			logging.SetLevel(logging.CRITICAL, "corsair")
 		}
+		addShutdownHook = c.Bool("shutdown")
 		port := c.Int("port")
 
 		directory, _ := os.Getwd()
@@ -99,6 +106,10 @@ func main() {
 		}
 
 		// do we have a valid directory?
+		directory := c.String("directory")
+		if len(directory) == 0 {
+			directory = currentWorkingDirectory
+		}
 		if _, err := os.Stat(directory); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: Directory %v does not exist\n", directory)
 			cli.ShowAppHelp(c)

@@ -16,7 +16,7 @@ func startServer(directory string, destination *url.URL, port int) {
 	proxy := goproxy.NewProxyHttpServer()
 	proxy.Verbose = verbose
 
-	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+	handleRequest := func(w http.ResponseWriter, req *http.Request) {
 		// Do we have a file?
 		var file string
 		pathWithoutLeadingSlash := req.URL.Path[1:]
@@ -40,7 +40,25 @@ func startServer(directory string, destination *url.URL, port int) {
 
 			proxy.ServeHTTP(w, req)
 		}
-	})
+	}
+
+	if addShutdownHook {
+		http.HandleFunc("/corsair", func(w http.ResponseWriter, req *http.Request) {
+			switch req.Method {
+			case "DELETE":
+				{
+					logger.Info("Shutdown requested")
+					os.Exit(0)
+				}
+			case "POST", "PUT":
+				go requestLiveReload("/")
+			default:
+				handleRequest(w, req)
+			}
+		})
+	}
+
+	http.HandleFunc("/", handleRequest)
 
 	logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 }
