@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/codegangsta/cli"
-	"github.com/skratchdot/open-golang/open"
 	"log"
 	"net/url"
 	"os"
+
+	"github.com/codegangsta/cli"
+	"github.com/skratchdot/open-golang/open"
 )
 
 // Package variables
@@ -65,7 +66,13 @@ func main() {
 			Usage: "debounce timeout for live reload",
 		},
 	}
-
+	app.Commands = []cli.Command{
+		{
+			Name:   "proxy",
+			Usage:  "Run a whitelist proxy",
+			Action: whitelist,
+		},
+	}
 	app.Action = func(c *cli.Context) {
 		// Set some variables
 		verbose = c.Bool("verbose")
