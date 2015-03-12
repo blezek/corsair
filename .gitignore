@@ -2,3 +2,5 @@ src/github.com
 bin
 pkg
 assets.go
+src/bitbucket.org
+go

@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/url"
 	"os"
 
 	"github.com/codegangsta/cli"
+	"github.com/op/go-logging"
 	"github.com/skratchdot/open-golang/open"
 )
 
@@ -15,7 +15,17 @@ var (
 	verbose               = false
 	timeoutInMilliseconds = 300
 	silent                = false
+	logger                = logging.MustGetLogger("corsair")
 )
+
+func init() {
+	// Configure our logging
+	backend := logging.NewLogBackend(os.Stdout, "", 0)
+	format := logging.MustStringFormatter("%{color}%{time:15:04:05.000} %{module} ▶ %{level:.5s} %{id:03x}%{color:reset} %{message}")
+	formatter := logging.NewBackendFormatter(backend, format)
+	logging.SetBackend(formatter)
+
+}
 
 func main() {
 
@@ -75,8 +85,12 @@ func main() {
 	}
 	app.Action = func(c *cli.Context) {
 		// Set some variables
-		verbose = c.Bool("verbose")
-		silent = c.Bool("silent")
+		if c.Bool("verbose") {
+			logging.SetLevel(logging.DEBUG, "corsair")
+		}
+		if c.Bool("silent") {
+			logging.SetLevel(logging.CRITICAL, "corsair")
+		}
 		port := c.Int("port")
 
 		directory, _ := os.Getwd()
@@ -107,10 +121,7 @@ func main() {
 			livereloader(directory)
 		}
 
-		if !silent {
-			log.Printf("Starting corsair in %v on port %v forwarding to %v://%v", directory, c.Int("port"), destination.Scheme, destination.Host)
-			log.Printf("Visit:\n\n    http://localhost:%d\n\nTo get started", port)
-		}
+		logger.Info("Starting corsair in %v on port %v forwarding to %v://%v\n\nVisit:\n\n    http://localhost:%d\n\nTo get started\n\n", c.String("directory"), port, destination.Scheme, destination.Host, port)
 
 		if c.Bool("open") {
 			// Open the page
