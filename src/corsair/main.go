@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
+	"net/url"
+	"os"
+
 	"github.com/codegangsta/cli"
 	"github.com/op/go-logging"
 	"github.com/skratchdot/open-golang/open"
-	"net/url"
-	"os"
 )
 
 // Package variables
@@ -27,7 +28,6 @@ func init() {
 }
 
 func main() {
-	currentWorkingDirectory, _ := os.Getwd()
 
 	cli.AppHelpTemplate = AppHelpTemplate
 	app := cli.NewApp()
@@ -42,7 +42,6 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:  "dir,d,directory",
-			Value: currentWorkingDirectory,
 			Usage: "Where to look for static files, defaults to current working directory",
 		},
 		cli.BoolFlag{
@@ -77,7 +76,13 @@ func main() {
 			Usage: "debounce timeout for live reload",
 		},
 	}
-
+	app.Commands = []cli.Command{
+		{
+			Name:   "proxy",
+			Usage:  "Run a whitelist proxy",
+			Action: whitelist,
+		},
+	}
 	app.Action = func(c *cli.Context) {
 		// Set some variables
 		if c.Bool("verbose") {
@@ -88,9 +93,14 @@ func main() {
 		}
 		port := c.Int("port")
 
+		directory, _ := os.Getwd()
+		if c.String("directory") != "" {
+			directory = c.String("directory")
+		}
+
 		// do we have a valid directory?
-		if _, err := os.Stat(c.String("directory")); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: Directory %v does not exist\n", c.String("directory"))
+		if _, err := os.Stat(directory); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Directory %v does not exist\n", directory)
 			cli.ShowAppHelp(c)
 			os.Exit(1)
 		}
@@ -108,7 +118,7 @@ func main() {
 		// Do we live reload?
 		if c.Bool("livereload") {
 			timeoutInMilliseconds = c.Int("timeout")
-			livereloader(c.String("directory"))
+			livereloader(directory)
 		}
 
 		logger.Info("Starting corsair in %v on port %v forwarding to %v://%v\n\nVisit:\n\n    http://localhost:%d\n\nTo get started\n\n", c.String("directory"), port, destination.Scheme, destination.Host, port)
@@ -118,7 +128,7 @@ func main() {
 			open.Start(fmt.Sprintf("http://localhost:%d", port))
 		}
 
-		startServer(c.String("directory"), destination, port)
+		startServer(directory, destination, port)
 	}
 
 	app.Run(os.Args)
