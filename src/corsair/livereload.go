@@ -5,7 +5,6 @@ import (
 	"flag"
 	"github.com/dblezek/lrserver"
 	"github.com/go-fsnotify/fsnotify"
-	"log"
 	"os"
 	"time"
 )
@@ -20,11 +19,12 @@ var debounceTimeout = flag.Int("timeout", 300, "Time in milliseconds to wait for
 // tell the lrserver to reload, otherwise just go away.
 // Only interval seconds after the last request will the lrserver actually be
 // requested to reload
-func request(fileName string, interval time.Duration) {
+func requestLiveReload(fileName string) {
+	interval := time.Duration(*debounceTimeout) * time.Millisecond
 	time.Sleep(interval)
 	if time.Now().After(lastReloadRequest.Add(interval)) {
 		// now request the reload
-		log.Println("Finally sending request")
+		logger.Debug("Finally sending request")
 		lrserver.Reload(fileName)
 	}
 }
@@ -47,7 +47,7 @@ func livereloader(directory string) {
 				f, _ := reader.ReadString(terminationCharacter)
 				logger.Debug("Read %v\n", f)
 
-				go request(f, 300*time.Millisecond)
+				go requestLiveReload(f)
 			}
 		}()
 	}
@@ -60,7 +60,7 @@ func livereloader(directory string) {
 
 				// Record the time of this reload request, and queue it up
 				lastReloadRequest = time.Now()
-				go request(event.Name, 300*time.Millisecond)
+				go requestLiveReload(event.Name)
 			case err := <-watcher.Errors:
 				logger.Error("Error: ", err)
 			}
