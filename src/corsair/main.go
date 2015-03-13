@@ -19,10 +19,14 @@ var (
 	addShutdownHook       = false
 )
 
-func init() {
+func configureLogging(useColor bool) {
 	// Configure our logging
 	backend := logging.NewLogBackend(os.Stdout, "", 0)
-	format := logging.MustStringFormatter("%{color}%{time:15:04:05.000} %{module} ▶ %{level:.5s} %{id:03x}%{color:reset} %{message}")
+	f := "%{time:15:04:05.000} %{module} ▶ %{level:.5s} %{id:03x} %{message}"
+	if useColor {
+		f = "%{color}%{time:15:04:05.000} %{module} ▶ %{level:.5s} %{id:03x}%{color:reset} %{message}"
+	}
+	format := logging.MustStringFormatter(f)
 	formatter := logging.NewBackendFormatter(backend, format)
 	logging.SetBackend(formatter)
 
@@ -81,6 +85,10 @@ func main() {
 			Value: timeoutInMilliseconds,
 			Usage: "debounce timeout for live reload",
 		},
+		cli.BoolFlag{
+			Name: "color,c",
+			Usage: "Log in color",
+		},
 	}
 	app.Commands = []cli.Command{
 		{
@@ -97,6 +105,7 @@ func main() {
 		if c.Bool("silent") {
 			logging.SetLevel(logging.CRITICAL, "corsair")
 		}
+		configureLogging(c.Bool("color"))
 		addShutdownHook = c.Bool("shutdown")
 		port := c.Int("port")
 
