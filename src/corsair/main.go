@@ -86,7 +86,7 @@ func main() {
 			Usage: "debounce timeout for live reload",
 		},
 		cli.BoolFlag{
-			Name: "color,c",
+			Name:  "color,c",
 			Usage: "Log in color",
 		},
 	}
@@ -95,6 +95,17 @@ func main() {
 			Name:   "proxy",
 			Usage:  "Run a whitelist proxy",
 			Action: whitelist,
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "verbose",
+					Usage: "be verbose",
+				},
+				cli.IntFlag{
+					Name:  "port",
+					Value: 47010,
+					Usage: "port for the proxy",
+				},
+			},
 		},
 	}
 	app.Action = func(c *cli.Context) {
@@ -109,16 +120,12 @@ func main() {
 		addShutdownHook = c.Bool("shutdown")
 		port := c.Int("port")
 
-		directory, _ := os.Getwd()
-		if c.String("directory") != "" {
-			directory = c.String("directory")
-		}
-
 		// do we have a valid directory?
 		directory := c.String("directory")
-		if len(directory) == 0 {
-			directory = currentWorkingDirectory
+		if directory == "" {
+			directory, _ = os.Getwd()
 		}
+
 		if _, err := os.Stat(directory); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: Directory %v does not exist\n", directory)
 			cli.ShowAppHelp(c)
