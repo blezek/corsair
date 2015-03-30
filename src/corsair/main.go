@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/codegangsta/cli"
-	"github.com/op/go-logging"
+	logging "github.com/op/go-logging"
 	"github.com/skratchdot/open-golang/open"
 )
 
@@ -104,6 +104,11 @@ func main() {
 					Name:  "port",
 					Value: 47010,
 					Usage: "port for the proxy",
+				},
+				cli.IntFlag{
+					Name:  "control",
+					Value: 47011,
+					Usage: "Control port for the proxy",
 				},
 			},
 		},
