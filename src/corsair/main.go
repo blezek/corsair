@@ -19,7 +19,8 @@ var (
 	addShutdownHook       = false
 )
 
-func configureLogging(useColor bool) {
+func configureLogging(c *cli.Context) {
+	useColor := c.GlobalBool("color")
 	// Configure our logging
 	backend := logging.NewLogBackend(os.Stdout, "", 0)
 	f := "%{time:15:04:05.000} %{module} ▶ %{level:.5s} %{id:03x} %{message}"
@@ -29,6 +30,12 @@ func configureLogging(useColor bool) {
 	format := logging.MustStringFormatter(f)
 	formatter := logging.NewBackendFormatter(backend, format)
 	logging.SetBackend(formatter)
+
+	// Be quiet by default
+	logging.SetLevel(logging.CRITICAL, "corsair")
+	if c.GlobalBool("verbose") {
+		logging.SetLevel(logging.DEBUG, "corsair")
+	}
 
 }
 
@@ -96,10 +103,6 @@ func main() {
 			Usage:  "Run a whitelist proxy",
 			Action: whitelist,
 			Flags: []cli.Flag{
-				cli.BoolFlag{
-					Name:  "verbose",
-					Usage: "be verbose",
-				},
 				cli.IntFlag{
 					Name:  "port",
 					Value: 47010,
@@ -115,13 +118,7 @@ func main() {
 	}
 	app.Action = func(c *cli.Context) {
 		// Set some variables
-		if c.Bool("verbose") {
-			logging.SetLevel(logging.DEBUG, "corsair")
-		}
-		if c.Bool("silent") {
-			logging.SetLevel(logging.CRITICAL, "corsair")
-		}
-		configureLogging(c.Bool("color"))
+		configureLogging(c)
 		addShutdownHook = c.Bool("shutdown")
 		port := c.Int("port")
 

@@ -2,16 +2,17 @@ package main
 
 import (
 	"bytes"
+	"encoding/gob"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/boltdb/bolt"
 	"github.com/codegangsta/cli"
 	"github.com/elazarl/goproxy"
 	lru "github.com/hashicorp/golang-lru"
@@ -23,26 +24,37 @@ var (
 	cache        *lru.Cache
 	lock         sync.Mutex
 	lastReadTime time.Time
+	db           *bolt.DB
 )
 
 type WhitelistEntry struct {
 	Domain      string
 	LastAccess  time.Time
-	AccessCount int
-	Status      bool
+	AccessCount int64
+	IsAllowed   bool
 }
 
 func whitelist(c *cli.Context) {
 	if len(c.Args()) < 1 {
 		log.Fatalf("Whitelist requires a file of hostnames to match")
 	}
+	configureLogging(c)
 	proxy := goproxy.NewProxyHttpServer()
-	proxy.Verbose = c.Bool("verbose")
+	proxy.Verbose = c.GlobalBool("verbose")
 
 	filename := c.Args().First()
 	siteRegex = make([]*regexp.Regexp, 0)
 	cache, _ = lru.New(1000)
 
+	var err error
+	db, err = bolt.Open("whitelist.db", 0600, nil)
+	if err != nil {
+		logger.Fatalf("Failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	createBuckets()
+	clearCache()
 	go func() {
 		for {
 			content, err := ioutil.ReadFile(filename)
@@ -60,6 +72,7 @@ func whitelist(c *cli.Context) {
 				}
 				if line != "" {
 					siteRegex = append(siteRegex, r)
+					insertRegex(line)
 				}
 			}
 			lock.Unlock()
@@ -76,17 +89,8 @@ func whitelist(c *cli.Context) {
 
 	var isBlacklist goproxy.ReqConditionFunc = func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
 		// log.Printf("Got request for %v", req.URL)
-		if v, ok := cache.Get(req.Host); ok {
-			entry := v.(WhitelistEntry)
-			entry.AccessCount = entry.AccessCount + 1
-			entry.LastAccess = time.Now()
-			cache.Add(req.Host, entry)
-			return entry.Status
-		} else {
-			v := checkHost(req.Host)
-			cache.Add(req.Host, v)
-			return v.Status
-		}
+		entry := checkHost(req.Host)
+		return !entry.IsAllowed
 	}
 
 	proxy.OnRequest(isBlacklist).DoFunc(
@@ -117,27 +121,20 @@ func printCache(r *http.Request) string {
 	}
 	buffer.WriteString(fmt.Sprintf("\nThe cache contains the following entries:\n"))
 
-	list := make(map[string]WhitelistEntry, cache.Len())
-	var keys sort.StringSlice
-	for _, key := range cache.Keys() {
-		v, ok := cache.Get(key)
-		if ok {
-			entry := v.(WhitelistEntry)
-			k := fmt.Sprintf("%v-%v", entry.LastAccess.Unix(), entry.Domain)
-			list[k] = entry
-			keys = append(keys, k)
-		}
-	}
-	// Sort by access date
-	sort.Sort(keys)
-
 	table := tablewriter.NewWriter(&buffer)
-	table.SetHeader([]string{"Site", "Count", "Date", "Status"})
-	for _, key := range keys {
-		entry := list[key]
-		table.Append([]string{entry.Domain, fmt.Sprintf("%v", entry.AccessCount), entry.LastAccess.Format(time.RubyDate), fmt.Sprintf("%v", entry.Status)})
-		// buffer.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\n", entry.Domain, entry.AccessCount, entry.LastAccess, entry.Status))
-	}
+	table.SetHeader([]string{"Site", "Count", "Date", "IsAllowed"})
+	db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("cache"))
+		c := b.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var entry WhitelistEntry
+			buffer := bytes.NewBuffer(v)
+			gob.NewDecoder(buffer).Decode(&entry)
+			table.Append([]string{entry.Domain, fmt.Sprintf("%v", entry.AccessCount), entry.LastAccess.Format(time.RubyDate), fmt.Sprintf("%v", entry.IsAllowed)})
+		}
+		return nil
+	})
+	// buffer.WriteString(fmt.Sprintf("%v\t%v\t%v\t%v\n", entry.Domain, entry.AccessCount, entry.LastAccess, entry.IsAllowed))
 	table.Render()
 	return buffer.String()
 
@@ -150,13 +147,17 @@ func reportCache(w http.ResponseWriter, req *http.Request) {
 func checkHost(host string) WhitelistEntry {
 	lock.Lock()
 	defer lock.Unlock()
-	entry := WhitelistEntry{Domain: host, LastAccess: time.Now(), AccessCount: 1, Status: true}
-	for _, re := range siteRegex {
-		if re.MatchString(host) {
-			entry.Status = false
-			return entry
-		}
-	}
-	return entry
+	entry := WhitelistEntry{Domain: host, LastAccess: time.Now(), AccessCount: 0, IsAllowed: false}
+
+	// Check using bolt
+	return checkAndCache(entry)
+
+	// for _, re := range siteRegex {
+	// 	if re.MatchString(host) {
+	// 		entry.IsAllowed = false
+	// 		return entry
+	// 	}
+	// }
+	// return entry
 
 }
