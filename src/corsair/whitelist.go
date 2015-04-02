@@ -14,6 +14,7 @@ import (
 
 	"github.com/boltdb/bolt"
 	"github.com/codegangsta/cli"
+	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/elazarl/goproxy"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/olekukonko/tablewriter"
@@ -105,7 +106,8 @@ func whitelist(c *cli.Context) {
 
 	p := fmt.Sprintf(":%d", c.Int("control"))
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", reportCache)
+	mux.Handle("/", http.FileServer(&assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, Prefix: "assets"}))
+	// mux.HandleFunc("/", reportCache)
 	go http.ListenAndServe(p, mux)
 	logger.Info("Started server on %v", p)
 	p = fmt.Sprintf(":%d", c.Int("port"))
