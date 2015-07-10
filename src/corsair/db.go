@@ -1,87 +1,131 @@
 package main
 
 import (
-	"bytes"
-	"encoding/gob"
+	"database/sql"
 	"regexp"
 	"time"
 
-	"github.com/boltdb/bolt"
+	_ "github.com/mattn/go-sqlite3"
 )
 
-func createBuckets() {
-	db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte("user"))
-		if err != nil {
-			return err
-		}
-		_, err = tx.CreateBucketIfNotExists([]byte("whitelist"))
-		if err != nil {
-			return err
-		}
-		_, err = tx.CreateBucketIfNotExists([]byte("cache"))
-		if err != nil {
-			return err
-		}
-		return nil
-	})
+var db *sql.DB
+
+func init() {
+	logger.Info("Starting initialize")
+	var err error
+	db, err = sql.Open("sqlite3", "whitelist.db")
+	if err != nil {
+		logger.Fatalf("Failed to open database: %v", err)
+	}
+
+	create := `
+  create table if not exists whitelist (
+    url text primary key
+  );
+  create table if not exists hit (
+    url text primary key,
+    access_count int,
+    last_access timestamp
+  );
+  create table if not exists miss (
+    url text primary key,
+    access_count int,
+    last_access timestamp
+  );
+
+  create table if not exists cache (
+	  domain text primary key,
+    last_access timestamp,
+    access_count int,
+    is_allowed boolean 
+  );
+
+  `
+	_, err = db.Exec(create)
+	if err != nil {
+		logger.Fatalf("Failed to create db:", err)
+		return
+	}
 }
 
 func insertRegex(r string) {
-	db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("whitelist"))
-		logger.Debug("Putting %v into whitelist regexp", r)
-		b.Put([]byte(r), []byte(r))
-		return nil
-	})
-}
-
-func clearCache() {
-	db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("cache"))
-		b.ForEach(func(k, v []byte) error {
-			logger.Debug("Deleting %v from cache", string(k))
-			return b.Delete(k)
-		})
-		return nil
-	})
+	statement, err := db.Prepare("insert or ignore into whitelist values (?)")
+	if err != nil {
+		logger.Fatalf("Failed to prepare statement :", err)
+		return
+	}
+	defer statement.Close()
+	_, err = statement.Exec(r)
+	if err != nil {
+		logger.Fatalf("Failed to exec statement :", err)
+		return
+	}
 }
 
 func checkAndCache(entry WhitelistEntry) WhitelistEntry {
 	// Do we alredy have the entry?
-	db.Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte("cache"))
-		val := bucket.Get([]byte(entry.Domain))
-		if val != nil {
-			buffer := bytes.NewBuffer(val)
-			gob.NewDecoder(buffer).Decode(&entry)
-			logger.Debug("Found cached entry: %v", entry)
-		} else {
-			// Is it a valid domain?
-			wlBucket := tx.Bucket([]byte("whitelist"))
-			entry.IsAllowed = false
-			wlBucket.ForEach(func(k, v []byte) error {
-				logger.Debug("Checking host %v against %v ", entry.Domain, string(k))
-				r, err := regexp.Compile(string(k))
-				if err == nil {
-					entry.IsAllowed = entry.IsAllowed || r.MatchString(entry.Domain)
-					if entry.IsAllowed {
-						return nil
-					}
-				}
-				return nil
-			})
-			logger.Debug("Inserting new cache entry %v", entry)
-		}
+	entry.IsAllowed = true
 
-		// insert it
-		entry.AccessCount = entry.AccessCount + 1
-		entry.LastAccess = time.Now()
-		buffer := new(bytes.Buffer)
-		gob.NewEncoder(buffer).Encode(entry)
-		bucket.Put([]byte(entry.Domain), buffer.Bytes())
-
-		return nil
-	})
+	// insert it
+	entry.AccessCount = entry.AccessCount + 1
+	entry.LastAccess = time.Now()
 	return entry
+}
+
+func checkHost(host string) WhitelistEntry {
+	var err error
+	entry := WhitelistEntry{Domain: host, LastAccess: time.Now(), AccessCount: 0, IsAllowed: false}
+	statement, _ := db.Prepare("select domain, last_access, access_count, is_allowed from cache where domain = ?")
+	defer statement.Close()
+
+	rows, _ := statement.Query(host)
+	defer rows.Close()
+
+	if rows.Next() {
+		if err = rows.Scan(&entry.Domain, &entry.LastAccess, &entry.AccessCount, &entry.IsAllowed); err != nil {
+			logger.Error("Unable to scan results:", err)
+		}
+	} else {
+		statement, err := db.Prepare("insert into cache values (?,?,?,?)")
+		if err != nil {
+			logger.Error("Unable to prepare:", err)
+		}
+		statement.Exec(entry.Domain, entry.LastAccess, entry.AccessCount, entry.IsAllowed)
+		defer statement.Close()
+
+		// Need to loop over our regex's and check
+		statement, _ = db.Prepare("select url from whitelist")
+		whitelistRows, _ := statement.Query()
+		var line string
+		for whitelistRows.Next() {
+			whitelistRows.Scan(&line)
+			logger.Info("Looking at URL entry %v", line)
+			re, _ := regexp.Compile(line)
+			if re.MatchString(host) {
+				entry.IsAllowed = true
+				break
+			}
+		}
+		defer whitelistRows.Close()
+
+	}
+	entry.AccessCount += 1
+	entry.LastAccess = time.Now()
+	statement, _ = db.Prepare("update cache set last_access = ?, access_count = ? where domain = ?")
+	statement.Exec(entry.LastAccess, entry.AccessCount, entry.Domain)
+	defer statement.Close()
+
+	entry.LastAccess = time.Now()
+
+	// Check using bolt
+	return entry
+
+	// for _, re := range siteRegex {
+	// 	if re.MatchString(host) {
+	// 		entry.IsAllowed = false
+	// 		return entry
+	// 	}
+	// }
+	// return entry
+
 }

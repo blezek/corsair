@@ -36,6 +36,9 @@ func configureLogging(c *cli.Context) {
 	if c.GlobalBool("verbose") {
 		logging.SetLevel(logging.DEBUG, "corsair")
 	}
+	if c.GlobalBool("info") {
+		logging.SetLevel(logging.INFO, "corsair")
+	}
 
 }
 
@@ -44,7 +47,8 @@ func main() {
 	cli.AppHelpTemplate = AppHelpTemplate
 	app := cli.NewApp()
 	app.Name = "corsair"
-	readme, _ := Asset("Readme.md")
+	// readme, _ := Asset("Readme.md")
+	readme := "temp"
 
 	app.Usage = "\n" + string(readme)
 	app.Version = "1.0.0"
@@ -68,6 +72,10 @@ func main() {
 		cli.BoolFlag{
 			Name:  "verbose",
 			Usage: "Verbose logging",
+		},
+		cli.BoolFlag{
+			Name:  "info",
+			Usage: "info logging",
 		},
 		cli.IntFlag{
 			Name:  "port,p",
