@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en" ng-app="whitelistApp">
+<head>
+  <meta charset="utf-8">
+  <title>Whitelist</title>
+  <style type="text/css">
+  @import "css/bootstrap.min.css";
+  @import "css/font-awesome.min.css";
+  @import "css/bootstrap-theme.min.css";
+  @import "css/toastr.css";
+  @import "css/jumbotron-narrow.css";
+  </style>
+
+  <script src="js/jquery.js"> </script>
+  <script src="js/toastr.js" type="text/javascript"></script>
+  <script src="js/angular.js" type="text/javascript"></script>
+  <script src="js/bootstrap.js" type="text/javascript"></script>
+  <script src="js/ui-bootstrap.js" type="text/javascript"></script>
+  <script src="js/whitelist.js" type="text/javascript"></script>
+</head>
+<body ng-controller="WhitelistController">
+
+  <div class="container">
+    <div class="header">
+      <h3 class="text-muted">Whitelist</h3>
+    </div>
+
+    <div class="jumbotron">
+      <p class="lead">Whitelist is...</p>
+    </div>
+
+    <div class="col-lg-12">
+
+  <form class="form-inline" role="form">
+    <div class="form-group">
+      <input type="text" ng-model="ucr" ng-change="reload()" class="form-control" placeholder="url">
+    </div>
+    <div class="form-group">
+      <button type="submit" class="btn btn-default" ng-click="addSite()">Add</button>
+    </div>
+    
+  </form>
+
+  <table class="table table-striped table-hover table-condensed">
+    <thead>
+      <tr>
+        <td ng-class="{ active: sortingBy('url') }" ng-click="setOrderBy('url')">
+          URL
+          <i ng-class="{'fa':true, 'fa-fw':true, 'fa-sort-numeric-asc':!sort.descending && sortingBy('url'), 'fa-sort-numeric-desc':sort.descending && sortingBy('url')}" ></i>
+        </td>
+        <!-- <td ng-class="{ active: sortingBy('access_count') }" ng-click="setOrderBy('access_count')"> -->
+        <!--   Count -->
+        <!--   <i ng-class="{'fa':true, 'fa-fw':true, 'fa-sort-numeric-asc':!sort.descending && sortingBy('access_count'), 'fa-sort-numeric-desc':sort.descending && sortingBy('access_count')}" ></i> -->
+        <!-- </td> -->
+        <!-- <td ng-class="{ active: sortingBy('last_access') }" ng-click="setOrderBy('last_access')"> -->
+        <!--   Last Access -->
+        <!--   <i ng-class="{'fa':true, 'fa-fw':true, 'fa-sort-numeric-asc':!sort.descending && sortingBy('last_access'), 'fa-sort-numeric-desc':sort.descending && sortingBy('last_access')}" ></i> -->
+        <!-- </td> -->
+        <td></td>
+      </tr>
+    </thead>
+    <tbody>
+      <tr ng-repeat="row in rows | orderBy:sort.column:sort.descending">
+        <td>{{row.url}}</td>
+        <!-- <td>{{row.access_count}}</td> -->
+        <!-- <td>{{row.last_access}}</td> -->
+        <td><i class="fa fa-times-circle fa-lg" ng-click="deleteSite(row)"></i></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <pagination total-items="numberOfItems" items-per-page="pageSize" ng-model="pg" page="currentPage"  ng-change="pageChanged()"></pagination>
+
+      <footer class="footer">
+        <p>&copy; Yittle Bits 2015</p>
+      </footer>
+
+    </div> <!-- /container -->
+  </div>
+
+</body>
+</html>

@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
+	"github.com/elazarl/go-bindata-assetfs"
 	"github.com/elazarl/goproxy"
+	"github.com/gorilla/mux"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/olekukonko/tablewriter"
 )
@@ -97,10 +99,21 @@ func whitelist(c *cli.Context) {
 
 	// Serve the assets and proxy
 	p := fmt.Sprintf(":%d", c.Int("control"))
-	mux := http.NewServeMux()
-	// mux.Handle("/", http.FileServer(&assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, Prefix: "assets"}))
-	mux.HandleFunc("/", reportCache)
-	go http.ListenAndServe(p, mux)
+	h := http.NewServeMux()
+	mux := mux.NewRouter()
+	mux.NotFoundHandler = &FourOhFourHandler{}
+	sub := mux.PathPrefix("/rest").Subrouter()
+	registerRest(sub)
+
+	// Assets
+	fs := http.FileServer(&assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, Prefix: "assets"})
+	mux.PathPrefix("/").Handler(fs)
+
+	h.Handle("/", mux)
+	// http.Handle("/", mux)
+	_ = mux
+	go http.ListenAndServe(p, h)
+
 	logger.Info("Started server on %v", p)
 	p = fmt.Sprintf(":%d", c.Int("port"))
 	logger.Info("Started proxy on %v", p)
@@ -126,4 +139,11 @@ func printCache(r *http.Request) string {
 
 func reportCache(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, printCache(req))
+}
+
+type FourOhFourHandler struct {
+}
+
+func (self *FourOhFourHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	http.Error(w, fmt.Sprintf("could not find match for %v\n", req.URL), http.StatusNotFound)
 }
