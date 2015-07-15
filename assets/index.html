@@ -30,22 +30,14 @@
     </div>
 
     <div class="col-lg-12">
+      <hr/>
+      <button type="submit" class="btn btn-default" ng-click="addSite()">Add new site</button>
 
-  <form class="form-inline" role="form">
-    <!-- <div class="form-group"> -->
-    <!--   <input type="text" ng-model="ucr" ng-change="reload()" class="form-control" placeholder="url"> -->
-    <!-- </div> -->
-    <div class="form-group">
-      <button type="submit" class="btn btn-default" ng-click="addSite()">Add</button>
-    </div>
-  </form>
-
-  <table class="table table-striped table-hover table-condensed">
+  <table class="table table-striped table-hover">
     <thead>
       <tr>
-        <td ng-class="{ active: sortingBy('url') }" ng-click="setOrderBy('url')">
+        <td>
           URL
-          <i ng-class="{'fa':true, 'fa-fw':true, 'fa-sort-numeric-asc':!sort.descending && sortingBy('url'), 'fa-sort-numeric-desc':sort.descending && sortingBy('url')}" ></i>
         </td>
         <!-- <td ng-class="{ active: sortingBy('access_count') }" ng-click="setOrderBy('access_count')"> -->
         <!--   Count -->
@@ -59,34 +51,32 @@
       </tr>
     </thead>
     <tbody>
-      <tr ng-repeat="row in rows | orderBy:sort.column:sort.descending">
+      <tr ng-repeat="row in rows | orderBy:'url'">
         <td>{{row.url}}</td>
         <!-- <td>{{row.access_count}}</td> -->
         <!-- <td>{{row.last_access}}</td> -->
-        <td><i class="fa fa-times-circle fa-lg" ng-click="deleteSite(row)"></i></td>
+        <td><a href="" ng-click="deleteSite(row)">delete</a></td>
       </tr>
     </tbody>
   </table>
 
-  <pagination total-items="numberOfItems" items-per-page="pageSize" ng-model="pg" page="currentPage"  ng-change="pageChanged()"></pagination>
-
-
-  
+  <hr/>  
   <table class="table table-striped table-hover table-condensed">
     <thead>
       <tr>
         <td ng-class="{ active: sortingBy('url') }" ng-click="setOrderBy('url')">
           URL
-          <i ng-class="{'fa':true, 'fa-fw':true, 'fa-sort-numeric-asc':!sort.descending && sortingBy('url'), 'fa-sort-numeric-desc':sort.descending && sortingBy('url')}" ></i>
+          <i ng-class="{'fa':true, 'fa-fw':true, 'fa-sort-alpha-asc':!sort.descending && sortingBy('url'), 'fa-sort-alpha-desc':sort.descending && sortingBy('url')}" ></i>
         </td>
         <td ng-class="{ active: sortingBy('access_count') }" ng-click="setOrderBy('access_count')">
-        <!--   Count -->
-          <i ng-class="{'fa':true, 'fa-fw':true, 'fa-sort-numeric-asc':!sort.descending && sortingBy('access_count'), 'fa-sort-numeric-desc':sort.descending && sortingBy('access_count')}" ></i>
+          Count
+          <i ng-class="{'fa':true, 'fa-fw':true, 'fa-sort-amount-asc':!sort.descending && sortingBy('access_count'), 'fa-sort-amount-desc':sort.descending && sortingBy('access_count')}" ></i>
         <!-- </td> -->
-        <td ng-class="{ active: sortingBy('last_access') }" ng-click="setOrderBy('last_access')">
-        <!--   Last Access -->
-          <i ng-class="{'fa':true, 'fa-fw':true, 'fa-sort-numeric-asc':!sort.descending && sortingBy('last_access'), 'fa-sort-numeric-desc':sort.descending && sortingBy('last_access')}" ></i>
+        <td ng-class="{ active: sortingBy('last_access_unix') }" ng-click="setOrderBy('last_access_unix')">
+          Last Access
+          <i ng-class="{'fa':true, 'fa-fw':true, 'fa-sort-asc':!sort.descending && sortingBy('last_access_unix'), 'fa-sort-desc':sort.descending && sortingBy('last_access_unix')}" ></i>
         <!-- </td> -->
+        <td></td>
         <td></td>
       </tr>
     </thead>
@@ -94,8 +84,8 @@
       <tr ng-repeat="row in blacklist | orderBy:sort.column:sort.descending">
         <td>{{row.url}}</td>
         <td>{{row.access_count}}</td>
-        <td>{{row.last_access}}</td>
-        <td><i class="fa fa-times-circle fa-lg" ng-click="deleteSite(row)"></i></td>
+        <td>{{row.last_access_humanized}}</td>
+        <td>allow <a href="" ng-click="addSite(row.url,row.id)">{{row.url}}</a> / <a href="" ng-click="addSite(row.url_pattern,row.id)">{{row.url_pattern}}</a></td>
       </tr>
     </tbody>
   </table>
