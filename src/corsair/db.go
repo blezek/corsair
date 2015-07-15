@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"regexp"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -20,14 +21,17 @@ func init() {
 
 	create := `
   create table if not exists whitelist (
-    url text primary key
+    id integer primary key,
+    url text unique
   );
 
   create table if not exists cache (
-	  url text primary key,
+    id integer primary key,
+	  url text unique,
     last_access timestamp,
     access_count int,
-    is_allowed int
+    is_allowed int,
+    whitelist_id integer with NULL
   );
 
   `
@@ -38,8 +42,23 @@ func init() {
 	}
 }
 
+func purgeCache() {
+	go func() {
+		for {
+			result, err := db.Exec("delete from cache where last_access < datetime('now', '-3 day' )")
+			if err != nil {
+				logger.Error("Failed to prepare statement :", err)
+			}
+			if count, err := result.RowsAffected(); err != nil && count > 0 {
+				logger.Info("Purged %v rows from cache", count)
+			}
+			time.Sleep(10 * time.Minute)
+		}
+	}()
+}
+
 func insertRegex(r string) {
-	statement, err := db.Prepare("insert or ignore into whitelist values (?)")
+	statement, err := db.Prepare("insert or ignore into whitelist (url) values (?)")
 	if err != nil {
 		logger.Fatalf("Failed to prepare statement :", err)
 		return
@@ -63,42 +82,63 @@ func checkAndCache(entry WhitelistEntry) WhitelistEntry {
 }
 
 func checkHost(host string) WhitelistEntry {
+	// Clip off port, if it's there
+	index := strings.Index(host, ":")
+	if index > 0 {
+		host = host[:index]
+	}
 	logger.Info("Checking host %v", host)
 	var err error
-	entry := WhitelistEntry{Domain: host, LastAccess: time.Now(), AccessCount: 0, IsAllowed: false}
-	statement, _ := db.Prepare("select url, last_access, access_count, is_allowed from cache where url = ?")
+	entry := WhitelistEntry{Domain: host, LastAccess: time.Now(), AccessCount: 0, IsAllowed: false, Id: 0}
+	// Localhost always works
+	if host == "localhost" {
+		entry.IsAllowed = true
+		return entry
+	}
+
+	statement, err := db.Prepare("select id, url, last_access, access_count, is_allowed from cache where url = ?")
+	if err != nil {
+		logger.Error("Unable to prepare statement:", err)
+	}
 	defer statement.Close()
 
-	rows, _ := statement.Query(entry.Domain)
-	rows.Close()
-
+	rows, err := statement.Query(host)
+	if err != nil {
+		logger.Error("Unable to prepare statement:", err)
+	}
 	if rows.Next() {
-		if err = rows.Scan(&entry.Domain, &entry.LastAccess, &entry.AccessCount, &entry.IsAllowed); err != nil {
+		if err = rows.Scan(&entry.Id, &entry.Domain, &entry.LastAccess, &entry.AccessCount, &entry.IsAllowed); err != nil {
 			logger.Error("Unable to scan results:", err)
 		}
 		logger.Info("Found a cache entry %v", entry)
 	} else {
-		statement, err := db.Prepare("insert into cache (url, last_access, access_count, is_allowed ) values (?,?,?,?)")
-		if err != nil {
-			logger.Error("Unable to prepare:", err)
-		}
-		defer statement.Close()
-		statement.Exec(entry.Domain, entry.LastAccess, entry.AccessCount, entry.IsAllowed)
 
 		// Need to loop over our regex's and check
-		statement, _ = db.Prepare("select url from whitelist")
+		statement, _ = db.Prepare("select id, url from whitelist")
 		whitelistRows, _ := statement.Query()
 		var line string
+		var id sql.NullInt64
 		for whitelistRows.Next() {
-			whitelistRows.Scan(&line)
+			whitelistRows.Scan(&id, &line)
+			line = strings.Replace(line, ".", "\\.", -1)
+			line = strings.Replace(line, "*", ".*", -1)
 			logger.Info("Looking at URL entry %v", line)
 			re, _ := regexp.Compile(line)
 			if re.MatchString(host) {
 				entry.IsAllowed = true
+				entry.WhitelistId = id
 				break
 			}
 		}
 		whitelistRows.Close()
+
+		statement, err := db.Prepare("insert into cache (url, last_access, access_count, is_allowed, whitelist_id ) values (?,?,?,?,?)")
+		if err != nil {
+			logger.Error("Unable to prepare:", err)
+		}
+		defer statement.Close()
+		statement.Exec(entry.Domain, entry.LastAccess, entry.AccessCount, entry.IsAllowed, entry.WhitelistId)
+
 	}
 	rows.Close()
 	logger.Info("url %v is allowed? %v", host, entry.IsAllowed)
