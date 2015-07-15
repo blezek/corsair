@@ -26,6 +26,8 @@ func registerRest(r *mux.Router) {
 	r.Path("/whitelist").Methods("POST").HandlerFunc(newItem)
 	// Delete an item
 	r.Path("/whitelist/{id}").Methods("DELETE").HandlerFunc(deleteItem)
+	// Get misses
+	r.Path("/blacklist").Methods("GET").HandlerFunc(getBlacklist)
 }
 
 func newItem(w http.ResponseWriter, request *http.Request) {
@@ -58,7 +60,7 @@ func getItems(w http.ResponseWriter, request *http.Request) {
 
 	// Get the queries
 	values := request.URL.Query()
-	logger.Infof("Values to the query %v", values)
+	logger.Info("Values to the query %v", values)
 
 	// Do the select
 	statement, err := db.Prepare("select rowid, url from whitelist")
@@ -82,6 +84,7 @@ func getItems(w http.ResponseWriter, request *http.Request) {
 	json.NewEncoder(w).Encode(items)
 
 }
+
 func deleteItem(w http.ResponseWriter, request *http.Request) {
 
 	rowid := mux.Vars(request)["id"]
@@ -99,4 +102,37 @@ func deleteItem(w http.ResponseWriter, request *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+func getBlacklist(w http.ResponseWriter, request *http.Request) {
+
+	// Get the queries
+	values := request.URL.Query()
+	logger.Info("Values to the query %v", values)
+
+	// Do the select
+	statement, err := db.Prepare("select rowid, url, access_count, last_access from cache where is_allowed = 0 order by last_access")
+	if err != nil {
+		logger.Error("Error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer statement.Close()
+	rows, err := statement.Query()
+	if err != nil {
+		logger.Error("Error", err)
+	}
+	items := Items{Rows: make([]Item, 0, 10)}
+	for rows.Next() {
+		item := Item{}
+		rows.Scan(&item.Id, &item.URL, &item.AccessCount, &item.LastAccess)
+		if err != nil {
+			logger.Error("Error", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		items.Rows = append(items.Rows, item)
+	}
+	json.NewEncoder(w).Encode(items)
+
 }

@@ -2,6 +2,7 @@ var siteApp = angular.module('whitelistApp', ['ui.bootstrap']);
 
 siteApp.controller('WhitelistController', function($scope,$modal,$http) {
   $scope.rows = [];
+  $scope.blacklist = [];
 
   $scope.loadRows = function () {
     // Our parameters
@@ -10,6 +11,15 @@ siteApp.controller('WhitelistController', function($scope,$modal,$http) {
     .success(function(result) {
       console.log(result);
       $scope.rows = result.rows;
+    })
+    .error(function(data,status,headers,config) {
+      console.log('failure');
+      toastr.error ( "Could not contact server" );
+    })
+    $http.get("rest/blocklist")
+    .success(function(result) {
+      console.log(result);
+      $scope.blacklist = result.rows;
     })
     .error(function(data,status,headers,config) {
       console.log('failure');

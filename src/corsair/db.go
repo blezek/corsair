@@ -22,22 +22,12 @@ func init() {
   create table if not exists whitelist (
     url text primary key
   );
-  create table if not exists hit (
-    url text primary key,
-    access_count int,
-    last_access timestamp
-  );
-  create table if not exists miss (
-    url text primary key,
-    access_count int,
-    last_access timestamp
-  );
 
   create table if not exists cache (
-	  domain text primary key,
+	  url text primary key,
     last_access timestamp,
     access_count int,
-    is_allowed boolean 
+    is_allowed int
   );
 
   `
@@ -73,25 +63,27 @@ func checkAndCache(entry WhitelistEntry) WhitelistEntry {
 }
 
 func checkHost(host string) WhitelistEntry {
+	logger.Info("Checking host %v", host)
 	var err error
 	entry := WhitelistEntry{Domain: host, LastAccess: time.Now(), AccessCount: 0, IsAllowed: false}
-	statement, _ := db.Prepare("select domain, last_access, access_count, is_allowed from cache where domain = ?")
+	statement, _ := db.Prepare("select url, last_access, access_count, is_allowed from cache where url = ?")
 	defer statement.Close()
 
-	rows, _ := statement.Query(host)
-	defer rows.Close()
+	rows, _ := statement.Query(entry.Domain)
+	rows.Close()
 
 	if rows.Next() {
 		if err = rows.Scan(&entry.Domain, &entry.LastAccess, &entry.AccessCount, &entry.IsAllowed); err != nil {
 			logger.Error("Unable to scan results:", err)
 		}
+		logger.Info("Found a cache entry %v", entry)
 	} else {
-		statement, err := db.Prepare("insert into cache values (?,?,?,?)")
+		statement, err := db.Prepare("insert into cache (url, last_access, access_count, is_allowed ) values (?,?,?,?)")
 		if err != nil {
 			logger.Error("Unable to prepare:", err)
 		}
-		statement.Exec(entry.Domain, entry.LastAccess, entry.AccessCount, entry.IsAllowed)
 		defer statement.Close()
+		statement.Exec(entry.Domain, entry.LastAccess, entry.AccessCount, entry.IsAllowed)
 
 		// Need to loop over our regex's and check
 		statement, _ = db.Prepare("select url from whitelist")
@@ -106,26 +98,37 @@ func checkHost(host string) WhitelistEntry {
 				break
 			}
 		}
-		defer whitelistRows.Close()
-
+		whitelistRows.Close()
 	}
+	rows.Close()
+	logger.Info("url %v is allowed? %v", host, entry.IsAllowed)
 	entry.AccessCount += 1
 	entry.LastAccess = time.Now()
-	statement, _ = db.Prepare("update cache set last_access = ?, access_count = ? where domain = ?")
-	statement.Exec(entry.LastAccess, entry.AccessCount, entry.Domain)
-	defer statement.Close()
 
-	entry.LastAccess = time.Now()
+	transaction, err := db.Begin()
+	if err != nil {
+		logger.Error("Error updating cache:", err)
+	}
 
-	// Check using bolt
+	updateStatement, err := transaction.Prepare("update cache set last_access = ?, access_count = ?, is_allowed = ? where url = ?")
+	if err != nil {
+		logger.Error("Error updating cache:", err)
+	}
+	defer updateStatement.Close()
+	var isAllowed = 0
+	if entry.IsAllowed {
+		isAllowed = 1
+	}
+	_, err = updateStatement.Exec(entry.LastAccess, entry.AccessCount, isAllowed, entry.Domain)
+	if err != nil {
+		logger.Error("Error updating cache:", err)
+	}
+	logger.Info("Finished updating cache: %v", entry)
+	err = transaction.Commit()
+	if err != nil {
+		logger.Error("Error updating cache:%v", err)
+	}
+
 	return entry
-
-	// for _, re := range siteRegex {
-	// 	if re.MatchString(host) {
-	// 		entry.IsAllowed = false
-	// 		return entry
-	// 	}
-	// }
-	// return entry
 
 }
