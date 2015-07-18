@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"database/sql"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"regexp"
 	"strings"
@@ -112,7 +114,18 @@ func whitelist(c *cli.Context) {
 		})
 
 	// If the site is on the black list, then reject it.
-	proxy.OnRequest(isBlacklist).HandleConnect(goproxy.AlwaysReject)
+	// proxy.OnRequest(isBlacklist).HandleConnect(goproxy.AlwaysReject)
+	proxy.OnRequest(isBlacklist).HijackConnect(func(r *http.Request, client net.Conn, ctx *goproxy.ProxyCtx) {
+		clientBuf := bufio.NewReadWriter(bufio.NewReader(client), bufio.NewWriter(client))
+		req, err := http.ReadRequest(clientBuf.Reader)
+		if err != nil {
+			logger.Info("Error %v", err)
+		}
+		logger.Info("HijackConnect for req: %v", req)
+		count, _ := client.Write([]byte("got here"))
+		logger.Info("Wrote %v bytes", count)
+		client.Close()
+	})
 
 	// Serve the assets and proxy
 	p := fmt.Sprintf(":%d", c.Int("control"))

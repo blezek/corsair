@@ -138,8 +138,18 @@ func getBlacklist(w http.ResponseWriter, request *http.Request) {
 	values := request.URL.Query()
 	logger.Info("Values to the query %v", values)
 
+	query := "select id, url, access_count, last_access, is_allowed from cache where is_allowed = 0 order by last_access"
+	page_size, ok := values["page_size"]
+	if ok && len(page_size) > 0 {
+		logger.Info("Got page_size of %v", page_size)
+	}
+	start, ok := values["start"]
+	if ok && len(start) > 0 {
+		logger.Info("Got start of %v", start)
+	}
+
 	// Do the select
-	statement, err := db.Prepare("select id, url, access_count, last_access, is_allowed from cache where is_allowed = 0 order by last_access")
+	statement, err := db.Prepare(query)
 	if err != nil {
 		logger.Error("Error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -163,7 +173,7 @@ func getBlacklist(w http.ResponseWriter, request *http.Request) {
 		}
 		item.LastAccessHumanized = humanize.Time(item.LastAccess)
 		item.LastAccessUnix = item.LastAccess.Unix()
-		item.URLPattern = strings.Replace(item.URL, ".", "*.", -1)
+		item.URLPattern = makeURLPattern(item.URL)
 		items.Rows = append(items.Rows, item)
 	}
 	rows.Close()
@@ -219,4 +229,14 @@ func deleteBlacklist(w http.ResponseWriter, request *http.Request) {
 	}
 	logger.Info("Purged %v rows from cache", count)
 	fmt.Fprintf(w, "Deleted %v rows", count)
+}
+
+func makeURLPattern(url string) string {
+	v := strings.Split(url, ".")
+	if len(v) >= 2 {
+		l := len(v)
+		return v[l-2] + "*." + v[l-1]
+	} else {
+		return url
+	}
 }

@@ -5,7 +5,7 @@ siteApp.controller('WhitelistController', function($scope,$modal,$http,$interval
   $scope.blacklist = [];
 
   $scope.pageSize = 50;
-  $scope.currentPage = 50;
+  $scope.currentPage = 1;
 
 
   $scope.sort = {
@@ -39,9 +39,15 @@ siteApp.controller('WhitelistController', function($scope,$modal,$http,$interval
       console.log('failure');
       toastr.error ( "Could not contact server" );
     })
-    config = { params : {
-      "test" : "Foo"
-    } }
+
+    var start = 0;
+    if ( $scope.currentPage ) {
+      start = $scope.pageSize * ($scope.currentPage - 1 );
+    }
+    var config = { params : {
+      "start" : start,
+      "page_size" : $scope.pageSize
+    } };
     
     $http.get( "rest/blacklist", config )
     .success(function(result) {
@@ -57,7 +63,7 @@ siteApp.controller('WhitelistController', function($scope,$modal,$http,$interval
   // Reload every 5 seconds
   $interval($scope.loadRows, 5000);
 
-  $scope.addSite = function(site,id) {
+  $scope.addSite = function(site,id,edit) {
 
     var save = function() {
       var c;
@@ -77,7 +83,7 @@ siteApp.controller('WhitelistController', function($scope,$modal,$http,$interval
       });
     }
 
-    if ( site ) {
+    if ( site && !edit ) {
       $scope.site = {
         "url" : site
       };
@@ -85,6 +91,9 @@ siteApp.controller('WhitelistController', function($scope,$modal,$http,$interval
       return;
     }
     $scope.site = {};
+    if ( site && edit ) {
+      $scope.site = {"url": site};
+    }
     $modal.open({
       templateUrl: 'site.html',
       scope: $scope,

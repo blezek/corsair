@@ -1,6 +1,8 @@
-src/github.com
 bin
 pkg
 assets.go
 src/bitbucket.org
+src/golang.org
+src/github.com
+whitelist.db
 go
