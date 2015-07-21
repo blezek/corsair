@@ -4,12 +4,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 )
+
+type NewItem struct {
+	Id          int64  `json:"id"`
+	URL         string `json:"url"`
+	Password    string `json:"password",omit_empty`
+	Destination string `json:"destination",omit_empty`
+}
 
 type Item struct {
 	Id                  int64     `json:"id"`
@@ -32,6 +41,7 @@ func registerRest(r *mux.Router) {
 	r.Path("/whitelist").Methods("GET").HandlerFunc(getItems)
 	// Put a new item
 	r.Path("/whitelist").Methods("POST").HandlerFunc(newItem)
+	r.Path("/whitelist/post").Methods("POST").HandlerFunc(newItemPost)
 	// Delete an item
 	r.Path("/whitelist/{id}").Methods("DELETE").HandlerFunc(deleteItem)
 	// Get misses
@@ -39,40 +49,78 @@ func registerRest(r *mux.Router) {
 	r.Path("/blacklist/{id}").Methods("DELETE").HandlerFunc(deleteBlacklist)
 }
 
+func newItemPost(w http.ResponseWriter, request *http.Request) {
+	var item NewItem
+	var err error
+	// Try post info
+	logger.Info("Trying to parse the form")
+	err = request.ParseForm()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	} else {
+		logger.Info("Parsed: %v", request.Form)
+		item.Password = request.PostFormValue("password")
+		item.URL = request.PostFormValue("url")
+		item.Destination = request.PostFormValue("destination")
+	}
+
+	item, err = createItem(item, w)
+	if err != nil {
+		return
+	}
+	logger.Info("Got password %v", item.Password)
+	// Redirect to URL
+	logger.Info("Redirecting to %v", item.Destination)
+	http.Redirect(w, request, item.Destination, http.StatusTemporaryRedirect)
+
+}
 func newItem(w http.ResponseWriter, request *http.Request) {
-	var item Item
-	err := json.NewDecoder(request.Body).Decode(&item)
+	var item NewItem
+	var err error
+	err = json.NewDecoder(request.Body).Decode(&item)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	statement, err := db.Prepare("insert or ignore into whitelist (url) values ( ? )")
+	item, err = createItem(item, w)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer statement.Close()
-	result, err := statement.Exec(item.URL)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	item.Id, err = result.LastInsertId()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	json.NewEncoder(w).Encode(item)
 }
 
-func getItems(w http.ResponseWriter, request *http.Request) {
+func createItem(item NewItem, w http.ResponseWriter) (NewItem, error) {
+	statement, err := db.Prepare("insert or ignore into whitelist (url) values ( ? )")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return item, err
+	}
+	defer statement.Close()
+	result, err := statement.Exec(item.URL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return item, err
+	}
+	item.Id, err = result.LastInsertId()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return item, err
+	}
+	return item, nil
+}
 
-	// Get the queries
-	values := request.URL.Query()
-	logger.Info("Values to the query %v", values)
+func getItems(w http.ResponseWriter, request *http.Request) {
+	query := "select id, url from whitelist order by url "
+
+	// page_size and start
+	page_size, start, ok := getPaginationParameters(request.URL.Query())
+	if ok {
+		query = query + fmt.Sprintf(" limit %v offset %v ", page_size, start)
+	}
 
 	// Do the select
-	statement, err := db.Prepare("select id, url from whitelist")
+	statement, err := db.Prepare(query)
 	if err != nil {
 		logger.Error("Error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -96,6 +144,28 @@ func getItems(w http.ResponseWriter, request *http.Request) {
 		}
 		items.Rows = append(items.Rows, item)
 	}
+	// Count the rows
+	statement, err = db.Prepare("select count(*) from whitelist")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	rows, err = statement.Query()
+	if err != nil {
+		logger.Error("Error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer statement.Close()
+	for rows.Next() {
+		err = rows.Scan(&items.TotalRows)
+		if err != nil {
+			logger.Error("Error", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	rows.Close()
 	json.NewEncoder(w).Encode(items)
 
 }
@@ -134,18 +204,32 @@ func deleteItem(w http.ResponseWriter, request *http.Request) {
 
 func getBlacklist(w http.ResponseWriter, request *http.Request) {
 
-	// Get the queries
-	values := request.URL.Query()
-	logger.Info("Values to the query %v", values)
+	query := "select id, url, access_count, last_access, is_allowed from cache where is_allowed = 0 "
 
-	query := "select id, url, access_count, last_access, is_allowed from cache where is_allowed = 0 order by last_access"
-	page_size, ok := values["page_size"]
-	if ok && len(page_size) > 0 {
-		logger.Info("Got page_size of %v", page_size)
+	columnMap := map[string]string{"url": "url", "access_count": "access_count", "last_access": "last_access"}
+	var sort_by string = "url"
+	var order string = "asc"
+	a, ok := request.URL.Query()["sort_by"]
+	if ok && len(a) > 0 {
+		sort_by, ok = columnMap[a[0]]
+		if !ok {
+			sort_by = "url"
+		}
 	}
-	start, ok := values["start"]
-	if ok && len(start) > 0 {
-		logger.Info("Got start of %v", start)
+	a, ok = request.URL.Query()["descending"]
+	if ok && len(a) > 0 {
+		d, err := strconv.ParseBool(a[0])
+		if err != nil && d {
+			order = "desc"
+		}
+	}
+
+	query = query + " order by " + sort_by + " " + order
+
+	// page_size and start
+	page_size, start, ok := getPaginationParameters(request.URL.Query())
+	if ok {
+		query = query + fmt.Sprintf(" limit %v offset %v ", page_size, start)
 	}
 
 	// Do the select
@@ -179,7 +263,7 @@ func getBlacklist(w http.ResponseWriter, request *http.Request) {
 	rows.Close()
 
 	// Count the rows
-	statement, err = db.Prepare("select count(*) from cache")
+	statement, err = db.Prepare("select count(*) from cache where is_allowed = 0")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -239,4 +323,25 @@ func makeURLPattern(url string) string {
 	} else {
 		return url
 	}
+}
+
+func getPaginationParameters(values url.Values) (int, int, bool) {
+	var page_size int
+	var start int
+	var err error
+	page_size_array, page_size_ok := values["page_size"]
+	if page_size_ok && len(page_size_array) > 0 {
+		page_size, err = strconv.Atoi(page_size_array[0])
+		page_size_ok = err == nil
+	} else {
+		page_size_ok = false
+	}
+	start_array, start_ok := values["start"]
+	if start_ok && len(start_array) > 0 {
+		start, err = strconv.Atoi(start_array[0])
+		start_ok = err == nil
+	} else {
+		start_ok = false
+	}
+	return page_size, start, page_size_ok && start_ok
 }
