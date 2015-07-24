@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/sha1"
 	"database/sql"
+	"io/ioutil"
 	"regexp"
 	"strings"
 	"time"
@@ -11,10 +13,10 @@ import (
 
 var db *sql.DB
 
-func init() {
+func InitDB(filename string) {
 	logger.Info("Starting initialize")
 	var err error
-	db, err = sql.Open("sqlite3", "whitelist.db")
+	db, err = sql.Open("sqlite3", filename)
 	if err != nil {
 		logger.Fatalf("Failed to open database: %v", err)
 	}
@@ -171,4 +173,16 @@ func checkHost(host string) WhitelistEntry {
 
 	return entry
 
+}
+
+func checkPassword(given string) bool {
+	// Read the string from the file
+	contents, err := ioutil.ReadFile(passwordFile)
+	if err != nil {
+		logger.Error("Error reading password file (%v):%v", passwordFile, err)
+		return false
+	}
+	givenSHA1 := sha1.Sum([]byte(given))
+	logger.Info("given %x expected %x", givenSHA1, contents)
+	return string(contents) == given
 }

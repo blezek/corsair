@@ -31,13 +31,13 @@ fmt:
 	go fmt corsair/...
 
 doc:
-	godoc -http=:6060
+	godoc -http=:6060 -goroot=../go
 
 test:
 	go test -v -tags '$(BUILDTAGS)' corsair
 
 run: corsair
-	bin/corsair -verbose proxy whitelist.txt
+	bin/corsair -verbose proxy whitelist.db password.txt
 
 whitelist: corsair
 	bin/corsair proxy whitelist.txt
@@ -49,6 +49,7 @@ assets: bin/go-bindata
 	bin/go-bindata -nomemcopy -tags=$(BUILDTAGS) \
 		-debug=$(if $(findstring debug,$(BUILDTAGS)),true,false) \
 		-o=src/corsair/assets.go \
+		-prefix=assets \
 		Readme.md assets/...
 
 release: BUILDTAGS=release

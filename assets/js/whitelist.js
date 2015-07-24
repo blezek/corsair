@@ -79,6 +79,17 @@ siteApp.controller('WhitelistController', function($scope,$modal,$http,$interval
   // Reload every 5 seconds
   $interval($scope.loadRows, 5000);
 
+  $scope.purgeCache = function() {
+      var c = $http.delete("/rest/blacklist");
+      c.success(function(result) {
+        $scope.loadRows();
+        toastr.info(result);
+      })
+      c.error(function(data,status,headers,config) {
+        toastr.error("Could not remove cached item");
+      });
+  }
+  
   $scope.addSite = function(site,id,edit) {
 
     var save = function() {

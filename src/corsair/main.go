@@ -108,7 +108,7 @@ func main() {
 	app.Commands = []cli.Command{
 		{
 			Name:   "proxy",
-			Usage:  "Run a whitelist proxy",
+			Usage:  "corsair proxy <db_file> <password_file>",
 			Action: whitelist,
 			Flags: []cli.Flag{
 				cli.IntFlag{

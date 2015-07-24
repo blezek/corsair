@@ -1,13 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"text/template"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
@@ -46,7 +50,8 @@ func registerRest(r *mux.Router) {
 	r.Path("/whitelist/{id}").Methods("DELETE").HandlerFunc(deleteItem)
 	// Get misses
 	r.Path("/blacklist").Methods("GET").HandlerFunc(getBlacklist)
-	r.Path("/blacklist/{id}").Methods("DELETE").HandlerFunc(deleteBlacklist)
+	r.Path("/blacklist").Methods("DELETE").HandlerFunc(deleteBlacklistCache)
+	r.Path("/blacklist/{id}").Methods("DELETE").HandlerFunc(deleteBlacklistItem)
 }
 
 func newItemPost(w http.ResponseWriter, request *http.Request) {
@@ -65,6 +70,15 @@ func newItemPost(w http.ResponseWriter, request *http.Request) {
 		item.Destination = request.PostFormValue("destination")
 	}
 
+	if !checkPassword(item.Password) {
+		// Denied
+		u, _ := url.Parse(item.Destination)
+		buffer, _ := submitNewSite(u, "Incorrect password")
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintf(w, buffer)
+		return
+	}
+
 	item, err = createItem(item, w)
 	if err != nil {
 		return
@@ -72,6 +86,9 @@ func newItemPost(w http.ResponseWriter, request *http.Request) {
 	logger.Info("Got password %v", item.Password)
 	// Redirect to URL
 	logger.Info("Redirecting to %v", item.Destination)
+
+	deleteBlacklistMatching(item.URL)
+
 	http.Redirect(w, request, item.Destination, http.StatusTemporaryRedirect)
 
 }
@@ -288,7 +305,46 @@ func getBlacklist(w http.ResponseWriter, request *http.Request) {
 
 }
 
-func deleteBlacklist(w http.ResponseWriter, request *http.Request) {
+func deleteBlacklistMatching(url string) {
+	statement, err := db.Prepare("delete from cache where url = ?")
+	if err != nil {
+		logger.Error("Error deleting from cache:", err)
+		return
+	}
+	defer statement.Close()
+
+	_, err = statement.Exec(url)
+	if err != nil {
+		logger.Error("Error deleting from cache:", err)
+	}
+
+}
+
+func deleteCache() (int64, error) {
+	result, err := db.Exec("delete from cache")
+	if err != nil {
+		return 0, err
+	}
+
+	count, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return count, err
+}
+
+func deleteBlacklistCache(w http.ResponseWriter, request *http.Request) {
+	// Do the delete
+	count, err := deleteCache()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	logger.Info("Purged %v rows from cache", count)
+	fmt.Fprintf(w, "Deleted %v rows", count)
+}
+
+func deleteBlacklistItem(w http.ResponseWriter, request *http.Request) {
 	id := mux.Vars(request)["id"]
 
 	logger.Info("Deleting %v from cache", id)
@@ -344,4 +400,55 @@ func getPaginationParameters(values url.Values) (int, int, bool) {
 		start_ok = false
 	}
 	return page_size, start, page_size_ok && start_ok
+}
+
+func submitNewSite(url *url.URL, message string) (string, error) {
+	logger.Debug("Creating submit request for %v with message %v", url, message)
+	var err error
+	bodyBytes, err := Asset("post.html")
+	if err != nil {
+		logger.Error("Error:%v", err)
+		return "", err
+	}
+	bootstrap_min_css, err := Asset("css/bootstrap.min.css")
+	if err != nil {
+		logger.Error("Error:%v", err)
+		return "", err
+	}
+	bootstrap_theme_min_css, err := Asset("css/bootstrap-theme.min.css")
+	if err != nil {
+		logger.Error("Error:%v", err)
+		return "", err
+	}
+	jumbotron_narrow_css, err := Asset("css/jumbotron-narrow.css")
+	if err != nil {
+		logger.Error("Error:%v", err)
+		return "", err
+	}
+	host, _, err := net.SplitHostPort(url.Host)
+	if err != nil {
+		logger.Error("Error:%v", err)
+		return "", err
+	}
+
+	data := map[string]string{
+		"destination":             url.String(),
+		"url":                     host,
+		"bootstrap_min_css":       string(bootstrap_min_css),
+		"bootstrap_theme_min_css": string(bootstrap_theme_min_css),
+		"jumbotron_narrow_css":    string(jumbotron_narrow_css),
+		"message":                 message,
+	}
+	tmpl, err := template.New("post").Parse(string(bodyBytes))
+	if err != nil {
+		logger.Error("Error:%v", err)
+		return "", err
+	}
+	var buffer bytes.Buffer
+	err = tmpl.Execute(&buffer, data)
+	if err != nil {
+		logger.Error("Error:%v", err)
+		return "", err
+	}
+	return buffer.String(), nil
 }
