@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha1"
 	"database/sql"
+	"encoding/hex"
 	"io/ioutil"
 	"regexp"
 	"strings"
@@ -177,12 +178,16 @@ func checkHost(host string) WhitelistEntry {
 
 func checkPassword(given string) bool {
 	// Read the string from the file
-	contents, err := ioutil.ReadFile(passwordFile)
+	contentsRaw, err := ioutil.ReadFile(passwordFile)
 	if err != nil {
 		logger.Error("Error reading password file (%v):%v", passwordFile, err)
 		return false
 	}
-	givenSHA1 := sha1.Sum([]byte(given))
-	logger.Info("given %x expected %x", givenSHA1, contents)
-	return string(contents) == given
+	contents := strings.TrimSpace(string(contentsRaw))
+	h := sha1.New()
+	h.Write([]byte(given))
+	givenSHA1 := hex.EncodeToString(h.Sum(nil))
+	valid := contents == givenSHA1
+	logger.Info("%v for passwd %v given '%v' expected '%v'", valid, given, givenSHA1, contents)
+	return valid
 }

@@ -100,6 +100,12 @@ func newItem(w http.ResponseWriter, request *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if !checkPassword(item.Password) {
+		// Denied
+		http.Error(w, "Password is not valid", http.StatusUnauthorized)
+		return
+	}
+
 	item, err = createItem(item, w)
 	if err != nil {
 		return

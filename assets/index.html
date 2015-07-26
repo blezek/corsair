@@ -88,7 +88,8 @@
         <td>{{row.url}}</td>
         <td>{{row.access_count}}</td>
         <td>{{row.last_access_humanized}}</td>
-        <td>allow <a href="" ng-click="addSite(row.url,row.id)">{{row.url}}</a> / <a href="" ng-click="addSite(row.url_pattern,row.id)">{{row.url_pattern}}</a> / <a href="" ng-click=addSite(row.url_pattern,row.id,true)>edit</a></td>
+        <td>allow
+          <a href="" ng-click="addSite(row.url,row.id,false)">{{row.url}}</a> / <a href="" ng-click="addSite(row.url_pattern,row.id,false)">{{row.url_pattern}}</a> / <a href="" ng-click="addSite(row.url_pattern,row.id,false)">edit</a> {{row.id}}</td>
       </tr>
     </tbody>
   </table>

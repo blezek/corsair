@@ -1,10 +1,16 @@
 <div class="modal-header">Add a url to the whitelist</div>
 <form name="siteForm">
   <div class="modal-body">
-    <div class="form-group">
-      <label for="formname" class="control-label">URL:</label>
-      <input ng-model="site.url" name="directory" type="text" class="form-control" name="url" placeholder="url" required>
-      <span class="error" ng-show="siteForm.directory.$error.required">URL is required.</span>
+
+    <div class="form-group input-group">
+      <span class="input-group-addon"><span class="glyphicon glyphicon-link"></span></span>
+      <input ng-model="site.url" type="text" class="form-control" placeholder="url" required>
+    </div>
+
+    
+    <div class="form-group input-group">
+      <span class="input-group-addon"><i class="glyphicon glyphicon-lock"></i></span>
+      <input ng-model="site.password" type="password" class="form-control" placeholder="password" required/>
     </div>
 
   </div>

@@ -34,7 +34,7 @@ siteApp.controller('WhitelistController', function($scope,$modal,$http,$interval
   $scope.loadRows = function () {
     // Our parameters
     var start = 0;
-    console.log($scope.wlPageSize, $scope.wlCurrentPage)
+    // console.log($scope.wlPageSize, $scope.wlCurrentPage)
     start = $scope.wlPageSize * ($scope.wlCurrentPage - 1 );
     var config = { params : {
       "start" : start,
@@ -43,7 +43,7 @@ siteApp.controller('WhitelistController', function($scope,$modal,$http,$interval
     
     $http.get("rest/whitelist", config)
     .success(function(result) {
-      console.log(result);
+      // console.log(result);
       $scope.rows = result.rows;
       $scope.wlNumberOfItems = result.total_rows;
       $scope.wlLoadStatus = true;
@@ -66,7 +66,7 @@ siteApp.controller('WhitelistController', function($scope,$modal,$http,$interval
     
     $http.get( "rest/blacklist", config )
     .success(function(result) {
-      console.log(result);
+      // console.log(result);
       $scope.blacklist = result.rows;
       $scope.numberOfItems = result.total_rows;
       $scope.blLoadStatus = true;
@@ -90,54 +90,61 @@ siteApp.controller('WhitelistController', function($scope,$modal,$http,$interval
       });
   }
   
-  $scope.addSite = function(site,id,edit) {
+  $scope.addSite = function(site,v,edit) {
 
-    var save = function() {
+    console.log ( "addSite site: " + site + " id: " + v + " edit: " + edit)
+    var id = v;
+    var save = function(site) {
       var c;
-      c = $http.post("/rest/whitelist", $scope.site)
+      console.log ( "Saving site: ", site);
+      $scope.password = site.password;
+      c = $http.post("/rest/whitelist", site)
       c.success(function() {
         $scope.loadRows();
         toastr.info ( "Added " + $scope.site.url + " to whitelist")
+        if ( id ) {
+          var c = $http.delete("/rest/blacklist/" + id);
+          c.success(function(result) {
+            $scope.loadRows();
+          })
+          c.error(function(data,status,headers,config) {
+            toastr.error("Could not remove cached item");
+          });
+        }
       }).error(function(data,status,headers,config) {
-        toastr.error("Could not save site to server");
+        toastr.error("Could not save site to server: " + data);
+        if ( status == 401 ) {
+          $scope.password = null;
+        }
       });
     };
 
-    if ( id ) {
-      var c = $http.delete("/rest/blacklist/" + id);
-      c.success(function(result) {
-        $scope.loadRows();
-      })
-      c.error(function(data,status,headers,config) {
-        toastr.error("Could not remove cached item");
+    
+    $scope.site = {
+      "password": $scope.password,
+      "url": site
+    };
+
+    if ( edit || !$scope.password ) {
+      console.log ("Editing site: ", $scope.site);
+      $modal.open({
+        templateUrl: 'site.html',
+        scope: $scope,
+        controller: function($scope,$modalInstance) {
+          console.log("Create Site Modal", $scope.site);
+          $scope.save = function() {
+            console.log ( "Modal save gives ", $scope.site );
+            save( $scope.site, id );
+            $modalInstance.dismiss();
+          };
+          $scope.close = function() { $modalInstance.dismiss(); };
+        }
       });
-    }
-
-    if ( site && !edit ) {
-      $scope.site = {
-        "url" : site
-      };
-      save();
       return;
+    } else {
+      save($scope.site, id);
     }
-    $scope.site = {};
-    if ( site && edit ) {
-      $scope.site = {"url": site};
-    }
-    $modal.open({
-      templateUrl: 'site.html',
-      scope: $scope,
-      controller: function($scope,$modalInstance) {
-        console.log("Create Site Modal");
-        $scope.save = function() { save(); $modalInstance.dismiss();};
-        $scope.close = function() { $modalInstance.dismiss(); };
-      }
-    });
-
   }
-  $scope.editSite = function(site) {
-    $scope.createSite(site);
-  };
 
   $scope.deleteSite = function(site) {
     $modal.open ({
@@ -167,3 +174,5 @@ siteApp.controller('WhitelistController', function($scope,$modal,$http,$interval
   $scope.loadRows();
 
 });
+
+
